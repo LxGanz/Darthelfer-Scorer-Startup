@@ -4,7 +4,7 @@ Startet auf einem Linux-Rechner (X11) die Dart-Scorer-Seite <https://scorer.dart
 
 1. Touchscreen einrichten (dem richtigen Monitor zuordnen, optional um 180° gedreht)
 2. Firefox mit der Seite auf dem Touch-Monitor öffnen
-3. Den Knopf auf der Seite klicken (per Beschriftung oder CSS-Selektor, **nicht** per Pixelposition)
+3. Sich kurz an Firefox andocken und den Knopf auf der Seite klicken (per Beschriftung oder CSS-Selektor, **nicht** per Pixelposition)
 4. Das dadurch geöffnete zweite Fenster auf den anderen Monitor verschieben und in den Vollbildmodus schalten
 
 ## Installation
@@ -44,6 +44,7 @@ Exec=/pfad/zu/scorer-startup/startup.sh
 
 ## Hinweise
 
-- Das Script bleibt laufen, solange der Browser offen ist. Wird es beendet, schließt sich Firefox.
+- Das Script startet Firefox selbstständig, dockt sich kurz an (Marionette, Port 2828), erledigt Klick und Fensterverschiebung und beendet sich dann. Firefox läuft weiter.
+- Schließt sich Firefox beim Ende des Scripts trotzdem mit, in `config.env` `KEEP_RUNNING=1` setzen. Dann bleibt das Script laufen, solange Firefox offen ist.
 - `TOUCH_ROTATE_180`: Ist die Berührung nach dem Start seitenverkehrt, den Wert in `config.env` umstellen (1 ↔ 0).
 - Das alte Script liegt zum Vergleich in `legacy/`.

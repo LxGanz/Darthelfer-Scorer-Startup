@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Öffnet die Scorer-Seite in Firefox, klickt den Knopf (per Text/Selektor statt Pixelposition),
-wartet auf das neue Fenster und schiebt es im Vollbild auf den Zielmonitor."""
+"""Verbindet sich mit dem bereits laufenden Firefox (startet startup.sh), klickt den Knopf
+(per Text/Selektor statt Pixelposition), wartet auf das neue Fenster und schiebt es im Vollbild
+auf den Zielmonitor. Danach trennt es sich wieder und beendet sich; Firefox läuft weiter."""
 
 import argparse
 import re
+import socket
 import sys
 import time
 
@@ -16,6 +18,7 @@ from selenium.common.exceptions import (
 )
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 
 CLICKABLE = "button, a, [role='button'], input[type='button'], input[type='submit'], [onclick]"
@@ -78,6 +81,18 @@ def click(driver, el):
         driver.execute_script("arguments[0].click();", el)
 
 
+def wait_for_marionette(port, timeout):
+    """Wartet, bis der von startup.sh gestartete Firefox auf seinem Marionette-Port erreichbar ist."""
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.5)
+    return False
+
+
 def place(driver, geom, fullscreen=False):
     x, y, w, h = geom
     driver.set_window_rect(x=x, y=y, width=w, height=h)
@@ -93,21 +108,23 @@ def main():
     p.add_argument("--target-geom", required=True, help='"x y breite hoehe" des Zielmonitors')
     p.add_argument("--button-text", default="")
     p.add_argument("--button-selector", default="")
-    p.add_argument("--profile", default="")
     p.add_argument("--timeout", type=int, default=60)
+    p.add_argument("--marionette-port", type=int, default=2828)
+    p.add_argument("--keep-running", action="store_true",
+                   help="Script nach der Einrichtung weiterlaufen lassen (Fallback)")
     args = p.parse_args()
 
     touch_geom = parse_geom(args.touch_geom)
     target_geom = parse_geom(args.target_geom)
 
-    opts = Options()
-    if args.profile:
-        opts.add_argument("-profile")
-        opts.add_argument(args.profile)
+    if not wait_for_marionette(args.marionette_port, args.timeout):
+        print("Firefox (Marionette) nicht erreichbar.", file=sys.stderr)
+        return 1
 
-    driver = webdriver.Firefox(options=opts)
+    # An den laufenden Firefox andocken statt einen neuen zu starten
+    service = Service(service_args=["--connect-existing", "--marionette-port", str(args.marionette_port)])
+    driver = webdriver.Firefox(service=service, options=Options())
     try:
-        driver.get(args.url)
         place(driver, touch_geom)
 
         # Ohne Text/Selektor: nur anzeigen, was klickbar ist
@@ -145,18 +162,18 @@ def main():
         place(driver, target_geom, fullscreen=True)
         print("Fenster auf Zielmonitor im Vollbild.")
 
-        # Script am Leben halten: endet es, schließt Selenium den Browser.
-        while True:
-            time.sleep(2)
-            if not driver.window_handles:
-                break
+        if args.keep_running:
+            while driver.window_handles:
+                time.sleep(2)
     except (WebDriverException, KeyboardInterrupt):
         pass
     finally:
-        try:
-            driver.quit()
-        except WebDriverException:
-            pass
+        # Trennt nur die Verbindung zum Browser; Firefox wurde von startup.sh gestartet.
+        if not args.keep_running:
+            try:
+                driver.quit()
+            except WebDriverException:
+                pass
     return 0
 
 

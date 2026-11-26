@@ -1,6 +1,7 @@
 #!/bin/bash
 # Startscript: richtet den Touchscreen ein, startet Firefox, klickt den Knopf
 # auf der Scorer-Seite und schiebt das neu geöffnete Fenster im Vollbild auf den zweiten Monitor.
+# Danach beendet sich das Script; Firefox läuft weiter.
 set -u
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,15 +69,20 @@ else
     log "Touchscreen eingerichtet (ID $DEVICE_ID)"
 fi
 
-# --- Browser steuern ---
+# --- Firefox starten ---
+# -marionette erlaubt dem Python-Script, sich kurz anzudocken. Firefox gehört diesem Script nicht
+# (setsid), läuft also weiter, wenn das Script fertig ist.
+mkdir -p "$FIREFOX_PROFILE"
+setsid firefox -marionette -no-remote -profile "$FIREFOX_PROFILE" --new-window "$URL" >/dev/null 2>&1 &
+
+# --- Knopf klicken, zweites Fenster verschieben, danach beenden ---
 PY="$DIR/.venv/bin/python"
 [ -x "$PY" ] || PY="python3"
 
-mkdir -p "$FIREFOX_PROFILE"
-ARGS=(--url "$URL" --touch-geom "$TOUCH_GEOM" --target-geom "$TARGET_GEOM"
-      --profile "$FIREFOX_PROFILE" --timeout "$TIMEOUT")
+ARGS=(--url "$URL" --touch-geom "$TOUCH_GEOM" --target-geom "$TARGET_GEOM" --timeout "$TIMEOUT")
 [ -n "$BUTTON_TEXT" ] && ARGS+=(--button-text "$BUTTON_TEXT")
 [ -n "$BUTTON_SELECTOR" ] && ARGS+=(--button-selector "$BUTTON_SELECTOR")
+[ "${KEEP_RUNNING:-0}" = "1" ] && ARGS+=(--keep-running)
 
 # Optional: Mauszeiger ausblenden (sudo apt install unclutter)
 # unclutter -idle 1 -root &
